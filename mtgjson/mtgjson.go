@@ -4,8 +4,10 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"strings"
+	"time"
 )
 
 // StringSlice implements the Valuer/Scanner interfaces to save to the database
@@ -56,11 +58,12 @@ type Set struct {
 
 // Card represents a Magic Card from a particular set
 type Card struct {
-	ID        uint32 `json:"-"`
-	MTGJsonID string `json:"id" db:"mtg_json_id"`
-	SetCode   string `json:"set" db:"set_code"`
-	SetName   string `json:"set" db:"set_name"`
-	Layout    string `json:"layout"`
+	ID          uint32    `json:"-"`
+	MTGJsonID   string    `json:"id" db:"mtg_json_id"`
+	SetCode     string    `json:"set" db:"set_code"`
+	SetName     string    `json:"set" db:"set_name"`
+	ReleaseDate time.Time `json:"date" db:"release_date"`
+	Layout      string    `json:"layout"`
 
 	Power     string `json:"power,omitempty"`
 	Toughness string `json:"toughness,omitempty"`
@@ -121,7 +124,7 @@ type ForeignName struct {
 	MultiverseID int    `json:"multiverseid"` // MULTIVID
 }
 
-func processCard(card *Card) error {
+func processCard(card *Card) {
 	card.SetCode = strings.ToLower(card.SetCode)
 	card.SetName = strings.ToLower(card.SetName)
 	card.Layout = strings.ToLower(card.Layout)
@@ -142,7 +145,6 @@ func processCard(card *Card) error {
 	card.Watermark = strings.ToLower(card.Watermark)
 	card.Artist = strings.ToLower(card.Artist)
 	card.ImageName = strings.ToLower(card.ImageName)
-	return nil
 }
 
 // LoadCollection unmarshals a mtgjson.com data dump into Set & Card structs
@@ -159,11 +161,21 @@ func LoadCollection(path string) (map[string]Set, error) {
 		return nil, err
 	}
 	for _, set := range setmap {
+		reldate, err := parseDate(set.ReleaseDate)
+		if err != nil {
+			return setmap, fmt.Errorf("Error parsing set %s: %s", set.Code, err)
+		}
 		for _, card := range set.Cards {
 			card.SetCode = set.Code
 			card.SetName = set.Name
+			card.ReleaseDate = reldate
 			processCard(card)
 		}
 	}
 	return setmap, err
+}
+
+func parseDate(s string) (time.Time, error) {
+	t, err := time.Parse("2006-01-02", s)
+	return t, err
 }

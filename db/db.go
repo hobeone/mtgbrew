@@ -36,7 +36,7 @@ func SearchCards(db *Handle, columns []string, values [][]string) ([]mtgjson.Car
 	for i, d := range selectvalues {
 		interfaceSlice[i] = d
 	}
-	queryString := "SELECT * from card WHERE " + strings.Join(selectors, " AND ")
+	queryString := "SELECT * from card WHERE " + strings.Join(selectors, " AND ") + "ORDER BY release_date,name"
 	cards := []mtgjson.Card{}
 	err := db.db.Select(&cards, queryString, interfaceSlice...)
 	return cards, err
@@ -45,7 +45,15 @@ func SearchCards(db *Handle, columns []string, values [][]string) ([]mtgjson.Car
 // CardByMTGJsonID returns the first card found with the given mtgjson.com id
 func CardByMTGJsonID(dbh *Handle, id string) (*mtgjson.Card, error) {
 	card := mtgjson.Card{}
-	err := dbh.db.Get(&card, "SELECT * FROM card WHERE mtg_json_id = ? LIMIT 1", id)
+	err := dbh.db.Get(&card, "SELECT * FROM card WHERE mtg_json_id = ? ORDER BY release_date LIMIT 1", id)
+	return &card, err
+}
+
+// CardByName returns the most recent version of a card with the exact given
+// name
+func CardByName(dbh *Handle, name string) (*mtgjson.Card, error) {
+	card := mtgjson.Card{}
+	err := dbh.db.Get(&card, "SELECT * FROM card WHERE name = ? ORDER BY release_date DESC LIMIT 1", name)
 	return &card, err
 }
 
@@ -55,6 +63,7 @@ func SaveCards(db *Handle, sets map[string]mtgjson.Set) error {
 "mtg_json_id",
 "set_code",
 "set_name",
+"release_date",
 "layout",
 "power",
 "toughness",
@@ -81,7 +90,7 @@ func SaveCards(db *Handle, sets map[string]mtgjson.Set) error {
 "source",
 "watermark",
 "artist",
-"image_name") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+"image_name") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 
 	for _, set := range sets {
 		tx := db.db.MustBegin()
@@ -91,6 +100,7 @@ func SaveCards(db *Handle, sets map[string]mtgjson.Set) error {
 				card.MTGJsonID,
 				card.SetCode,
 				card.SetName,
+				card.ReleaseDate,
 				card.Layout,
 				card.Power,
 				card.Toughness,
@@ -241,6 +251,7 @@ var schemaMigrations = []gomigrate.Migration{
   "mtg_json_id" VARCHAR(255),
   "set_code" VARCHAR(3),
 	"set_name" VARCHAR(255),
+	"release_date" DATETIME,
   "layout" VARCHAR(255),
   "power" VARCHAR(255),
   "toughness" VARCHAR(255),

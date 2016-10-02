@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
@@ -41,7 +42,8 @@ func (s *webServer) Serve(c *kingpin.ParseContext) error {
 	e.Use(headers)
 
 	e.GET("/v1/cards", server.handleCards)
-	e.GET("/v1/card/:id", server.cardByMyltiverseID)
+	e.GET("/v1/cardid/:id", server.cardByMyltiverseID)
+	e.GET("/v1/card/:name", server.cardByName)
 
 	err := e.Run(standard.New(":7999"))
 	if err != nil {
@@ -85,6 +87,26 @@ var (
 		//"status": "Status"
 	}
 )
+
+func (a *APIServer) cardByName(c echo.Context) error {
+	cardname := c.Param("name")
+	cardname, err := url.QueryUnescape(cardname)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("Invalid input: %s", err))
+	}
+	card, err := db.CardByName(a.DBH, cardname)
+	if err == sql.ErrNoRows {
+		return echo.NewHTTPError(http.StatusNotFound, "No card with that name")
+	}
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	b, err := json.MarshalIndent(card, "", "  ")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError)
+	}
+	return c.JSONBlob(http.StatusOK, b)
+}
 
 func (a *APIServer) cardByMyltiverseID(c echo.Context) error {
 	cardid := c.Param("id")

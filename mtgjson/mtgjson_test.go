@@ -18,6 +18,7 @@ func TestLoadCardJSON(t *testing.T) {
 	if !ok {
 		t.Fatal("The collection did not load properly")
 	}
+	spew.Dump(set.ReleaseDate)
 
 	if len(set.Cards) != 1 {
 		t.Fatalf("Expected 1 card got %d", len(set.Cards))
