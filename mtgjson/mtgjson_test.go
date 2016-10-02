@@ -2,18 +2,25 @@ package mtgjson
 
 import (
 	"testing"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 func TestLoadCardJSON(t *testing.T) {
-	collection, err := LoadCollection("../cards.json")
+	collection, err := LoadCollection("testsets.json")
 
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, ok := collection["LEA"]
+	set, ok := collection["LEA"]
 
 	if !ok {
 		t.Fatal("The collection did not load properly")
 	}
+
+	if len(set.Cards) != 1 {
+		t.Fatalf("Expected 1 card got %d", len(set.Cards))
+	}
+	spew.Dump(set.Cards)
 }

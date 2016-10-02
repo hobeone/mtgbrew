@@ -4,52 +4,56 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
-	"github.com/hobeone/mtgformat/gcloud/mtgjson"
+	"github.com/hobeone/mtgbrew/mtgjson"
 )
 
 type Card struct {
-	Name          string                `json:"name"`
-	ID            string                `json:"id"`
-	Href          string                `json:"url,omitempty"`
-	StoreURL      string                `json:"store_url"`
-	Types         []string              `json:"types,omitempty"`
-	Supertypes    []string              `json:"supertypes,omitempty"`
-	Subtypes      []string              `json:"subtypes,omitempty"`
-	Colors        []string              `json:"colors,omitempty"`
-	ConvertedCost int                   `json:"cmc"`
-	ManaCost      string                `json:"cost"`
-	Text          string                `json:"text"`
-	Power         string                `json:"power,omitempty"`
-	Toughness     string                `json:"toughness,omitempty"`
-	Loyalty       int                   `json:"loyalty,omitempty"`
-	Legalities    []mtgjson.MTGLegality `json:"legalities"`
-	Editions      []*Edition            `json:"editions,omitempty" datastore:"-"`
-}
+	ID        uint32 `json:"-"`
+	MTGJsonID string `json:"id"`
+	Layout    string `json:"layout"`
 
-type Edition struct {
-	Set          string `json:"set"`
-	SetID        string `json:"set_id"`
-	CardID       string `json:"-" datastore:"-"`
-	Watermark    string `json:"watermark,omitempty"`
-	Rarity       string `json:"rarity"`
-	Border       string `json:"-"`
-	Artist       string `json:"artist"`
-	MultiverseID int    `json:"multiverse_id"`
-	Flavor       string `json:"flavor,omitempty"`
+	Power     string `json:"power,omitempty"`
+	Toughness string `json:"toughness,omitempty"`
+	Loyalty   int    `json:"loyalty,omitempty"`
+	Hand      int    `json:"hand,omitempty"`
+	Life      int    `json:"life,omitempty"`
+
+	CMC      float32 `json:"cmc,omitempty"`
+	ManaCost string  `json:"manaCost"`
+
+	Name  string   `json:"name"`
+	Names []string `json:"names,omitempty"`
+	//ForeignNames []ForeignName `json:"foreignNames,omitempty"`
+	Type       string   `json:"type"`
+	Supertypes []string `json:"supertypes"`
+	Types      []string `json:"types"`
+	Subtypes   []string `json:"subtypes"`
+	Colors     []string `json:"colors"`
+	Rarity     string   `json:"rarity"`
+	Text       string   `json:"text"`
+
+	Timeshifted bool `json:"timeshifted,omitempty"`
+	Reserved    bool `json:"reserved,omitempty"`
+	Starter     bool `json:"starter"`
+
+	Flavor string `json:"flavor"`
+
+	MultiverseID int    `json:"multiverseid"` // MULTIVID
 	Number       string `json:"number"`
-	Layout       string `json:"layout"`
-	Href         string `json:"url,omitempty"`
-	ImageURL     string `json:"image_url,omitempty"`
-	SetURL       string `json:"set_url,omitempty"`
-	StoreURL     string `json:"store_url"`
-	HTMLURL      string `json:"html_url"`
-}
+	//	Variations   []int  `json:"variations,omitempty"` // MULTIVID
+	Source    string `json:"source,omitempty"`
+	Watermark string `json:"watermark,omitempty"`
+	Artist    string `json:"artist"`
+	ImageName string `json:"imageName"`
+	//Legalities   []Legality `json:"legalities"`
+	//Rulings      []Ruling   `json:"rulings,omitempty"`
+	//	Printings []string `json:"printings"`
 
-func (e *Edition) GenKey() string {
-	return sha1String(e.Set + "_" + strconv.Itoa(e.MultiverseID))
+	URL      string `json:"url,omitempty"`
+	ImageURL string `json:"image_url,omitempty"`
+	SetURL   string `json:"set_url,omitempty"`
 }
 
 type Set struct {
@@ -92,88 +96,7 @@ func transformRarity(rarity string) string {
 	}
 }
 
-func TransformEdition(s mtgjson.MTGSet, c mtgjson.MTGCard) *Edition {
-	return &Edition{
-		Set:          s.Name,
-		SetID:        s.Code,
-		Flavor:       c.Flavor,
-		MultiverseID: c.MultiverseId,
-		Watermark:    c.Watermark,
-		Rarity:       transformRarity(c.Rarity),
-		Artist:       c.Artist,
-		Border:       c.Border,
-		Layout:       c.Layout,
-		Number:       c.Number,
-		CardID:       sha1String(c.Name),
-	}
-}
-
-// FIXME: Add released dates
-func TransformSet(s mtgjson.MTGSet) Set {
-	return Set{
-		Name:   s.Name,
-		ID:     s.Code,
-		Border: s.Border,
-		Type:   s.Type,
-	}
-}
-
-func TransformCard(c mtgjson.MTGCard) Card {
-	return Card{
-		Name:          c.Name,
-		ID:            sha1String(c.Name),
-		Text:          c.Text,
-		Colors:        ToSortedLower(c.Colors),
-		Types:         ToSortedLower(c.Types),
-		Supertypes:    ToSortedLower(c.Supertypes),
-		Subtypes:      ToSortedLower(c.Subtypes),
-		Power:         c.Power,
-		Toughness:     c.Toughness,
-		Loyalty:       c.Loyalty,
-		ManaCost:      c.ManaCost,
-		Legalities:    c.Legalities,
-		ConvertedCost: int(c.ConvertedCost),
-	}
-}
-
-func TransformCollection(collection mtgjson.MTGCollection) ([]Set, []Card) {
-	cards := []Card{}
-	ids := map[string]Card{}
-	editions := []*Edition{}
-	sets := []Set{}
-
-	for _, set := range collection {
-		if strings.HasPrefix(set.Name, "p") {
-			continue
-		}
-
-		sets = append(sets, TransformSet(set))
-
-		for _, card := range set.Cards {
-			newcard := TransformCard(card)
-			newedition := TransformEdition(set, card)
-
-			if _, found := ids[newcard.ID]; !found {
-				ids[newcard.ID] = newcard
-				cards = append(cards, newcard)
-			}
-
-			editions = append(editions, newedition)
-		}
-	}
-
-	for i, c := range cards {
-		for _, edition := range editions {
-			if edition.CardID == c.ID {
-				cards[i].Editions = append(cards[i].Editions, edition)
-			}
-		}
-	}
-
-	return sets, cards
-}
-
-func TransformLegalities(lgs []mtgjson.MTGLegality) map[string]string {
+func TransformLegalities(lgs []mtgjson.Legality) map[string]string {
 	formats := map[string]string{}
 	for _, l := range lgs {
 		switch l.Format {
