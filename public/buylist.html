@@ -1,0 +1,17 @@
+<html>
+<head>
+<title></title>
+</head>
+<body>
+<form action="/v1/buylist" method="post" id="cards">
+  Cards:<br>
+  <textarea form="cards" name="cardlist" rows="24" cols="80" placeholder="cards..." required=true></textarea>
+  <br/>
+  Cards you already have:<br/>
+  <textarea form="cards" name="subtractlist" rows="24" cols="80" placeholder="cards..."></textarea>
+  <br/>
+  <input type="checkbox" name="excludebasic" value="true"> Exclude Basic Lands<br/>
+  <input type="submit" value="Submit">
+</form>
+</body>
+</html>

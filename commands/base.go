@@ -40,11 +40,14 @@ func (m *migrateSchema) Migrate(c *kingpin.ParseContext) error {
 
 type loadCardsToDatastore struct {
 	MTGJsonFilePath string
+	DBPath          string
 }
 
 func (l *loadCardsToDatastore) configure(app *kingpin.Application) {
 	loadCards := app.Command("load", "load cards from mtgjson.com to Google Datastore").Action(l.LoadData)
 	loadCards.Flag("file", "File containing MTGJson extended set information").Required().StringVar(&l.MTGJsonFilePath)
+
+	loadCards.Flag("dbpath", "Path to database").Required().StringVar(&l.DBPath)
 
 }
 
@@ -54,7 +57,7 @@ func (l *loadCardsToDatastore) LoadData(c *kingpin.ParseContext) error {
 		return err
 	}
 
-	dbh := db.NewDBHandle("foo.db", true, logrus.StandardLogger())
+	dbh := db.NewDBHandle(l.DBPath, true, logrus.StandardLogger())
 	err = db.SaveCards(dbh, collection)
 
 	if err != nil {
@@ -65,14 +68,17 @@ func (l *loadCardsToDatastore) LoadData(c *kingpin.ParseContext) error {
 
 type searchCards struct {
 	ProjectID string
+	DBPath    string
 }
 
 func (s *searchCards) configure(app *kingpin.Application) {
-	app.Command("search", "search cards").Action(s.Search)
+	searchCards := app.Command("search", "search cards").Action(s.Search)
+
+	searchCards.Flag("dbpath", "Path to database").Required().StringVar(&s.DBPath)
 }
 
 func (s *searchCards) Search(c *kingpin.ParseContext) error {
-	dbh := db.NewDBHandle("foo.db", true, logrus.StandardLogger())
+	dbh := db.NewDBHandle(s.DBPath, true, logrus.StandardLogger())
 	//dbh := NewMemoryDBHandle(true, logrus.StandardLogger(), true)
 	cards, err := db.SearchCards(dbh, []string{"name"}, [][]string{[]string{"Selfless Spirit"}})
 	if err != nil {

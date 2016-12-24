@@ -12,31 +12,45 @@ import (
 )
 
 var (
-	wildcardCols = []string{"name", "text", "flavor"}
+	wildcardCols = map[string]bool{
+		"name":   true,
+		"text":   true,
+		"flavor": true,
+	}
 )
 
-func genSelector(column string, values []string) string {
+func genSelector(column string, values []string) (string, []string) {
 	sel := fmt.Sprintf("%s = ?", column)
+
+	if _, ok := wildcardCols[column]; ok {
+		sel = fmt.Sprintf("%s LIKE ?", column)
+		for i, v := range values {
+			values[i] = "%" + v + "%"
+		}
+	}
+
 	selectors := make([]string, len(values))
 	for i := range values {
 		selectors[i] = sel
 	}
 	final := "(" + strings.Join(selectors, " OR ") + ")"
-	return final
+	return final, values
 }
 
 // SearchCards implements advanced searching of the card db
 func SearchCards(db *Handle, columns []string, values [][]string) ([]mtgjson.Card, error) {
 	selectors, selectvalues := []string{}, []string{}
 	for i, col := range columns {
-		selectors = append(selectors, genSelector(col, values[i]))
-		selectvalues = append(selectvalues, values[i]...)
+		selector, vals := genSelector(col, values[i])
+		selectors = append(selectors, selector)
+		selectvalues = append(selectvalues, vals...)
 	}
 	var interfaceSlice = make([]interface{}, len(selectvalues))
 	for i, d := range selectvalues {
 		interfaceSlice[i] = d
 	}
 	queryString := "SELECT * from card WHERE " + strings.Join(selectors, " AND ") + "ORDER BY release_date,name"
+	logrus.Infof("query: %s, values: ", queryString, selectvalues)
 	cards := []mtgjson.Card{}
 	err := db.db.Select(&cards, queryString, interfaceSlice...)
 	return cards, err
@@ -53,8 +67,13 @@ func CardByMTGJsonID(dbh *Handle, id string) (*mtgjson.Card, error) {
 // name
 func CardByName(dbh *Handle, name string) (*mtgjson.Card, error) {
 	card := mtgjson.Card{}
-	err := dbh.db.Get(&card, "SELECT * FROM card WHERE name = ? ORDER BY release_date DESC LIMIT 1", name)
+	err := dbh.db.Get(&card, "SELECT * FROM card WHERE search_name = ? ORDER BY release_date DESC LIMIT 1", normalizeName(name))
 	return &card, err
+}
+
+func normalizeName(name string) string {
+	norm := strings.ToLower(name)
+	return norm
 }
 
 //SaveCards saves all given cards to the db
@@ -74,6 +93,7 @@ func SaveCards(db *Handle, sets map[string]mtgjson.Set) error {
 "mana_cost",
 "name",
 "names",
+"search_name",
 "type",
 "super_types",
 "types",
@@ -90,8 +110,7 @@ func SaveCards(db *Handle, sets map[string]mtgjson.Set) error {
 "source",
 "watermark",
 "artist",
-"image_name") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-
+"image_name") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 	for _, set := range sets {
 		tx := db.db.MustBegin()
 		logrus.Infof("Adding %d cards from %s: %s", len(set.Cards), set.Code, set.Name)
@@ -111,6 +130,7 @@ func SaveCards(db *Handle, sets map[string]mtgjson.Set) error {
 				card.ManaCost,
 				card.Name,
 				card.Names,
+				normalizeName(card.Name),
 				card.Type,
 				card.Supertypes,
 				card.Types,
@@ -262,6 +282,7 @@ var schemaMigrations = []gomigrate.Migration{
   "mana_cost" VARCHAR(64),
   "name" VARCHAR(255),
   "names" VARCHAR(255),
+	"search_name" VARCHAR(255),
   "type" VARCHAR(255),
   "super_types" VARCHAR(255),
   "types" VARCHAR(255),
@@ -281,6 +302,7 @@ var schemaMigrations = []gomigrate.Migration{
   "image_name" VARCHAR(255)
 );
 CREATE INDEX name_idx on card (name);
+CREATE INDEX release_date_name_idx on card (search_name, release_date);
 CREATE UNIQUE INDEX mtgjson_idx on card (mtg_json_id)
 `,
 		Down: `

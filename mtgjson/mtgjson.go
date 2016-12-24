@@ -60,8 +60,8 @@ type Set struct {
 type Card struct {
 	ID          uint32    `json:"-"`
 	MTGJsonID   string    `json:"id" db:"mtg_json_id"`
-	SetCode     string    `json:"set" db:"set_code"`
-	SetName     string    `json:"set" db:"set_name"`
+	SetCode     string    `json:"setCode" db:"set_code"`
+	SetName     string    `json:"setName" db:"set_name"`
 	ReleaseDate time.Time `json:"date" db:"release_date"`
 	Layout      string    `json:"layout"`
 
@@ -74,8 +74,9 @@ type Card struct {
 	CMC      float32 `json:"cmc,omitempty"`
 	ManaCost string  `json:"manaCost" db:"mana_cost"`
 
-	Name  string      `json:"name"`
-	Names StringSlice `json:"names,omitempty"`
+	Name       string      `json:"name"`
+	Names      StringSlice `json:"names,omitempty"`
+	SearchName string      `json:"search_name,omitempty" db:"search_name"`
 	//ForeignNames []ForeignName `json:"foreignNames,omitempty"`
 	Type       string      `json:"type"`
 	Supertypes StringSlice `json:"supertypes" db:"super_types"`
@@ -125,26 +126,11 @@ type ForeignName struct {
 }
 
 func processCard(card *Card) {
-	card.SetCode = strings.ToLower(card.SetCode)
-	card.SetName = strings.ToLower(card.SetName)
-	card.Layout = strings.ToLower(card.Layout)
-	card.Power = strings.ToLower(card.Power)
-	card.Toughness = strings.ToLower(card.Toughness)
-	card.Name = strings.ToLower(card.Name)
 	card.Names = card.Names.ToLower()
-	card.Type = strings.ToLower(card.Type)
 	card.Supertypes = card.Supertypes.ToLower()
 	card.Types = card.Types.ToLower()
 	card.Subtypes = card.Subtypes.ToLower()
 	card.Colors = card.Colors.ToLower()
-	card.Rarity = strings.ToLower(card.Rarity)
-	card.Text = strings.ToLower(card.Text)
-	card.Flavor = strings.ToLower(card.Flavor)
-	card.Number = strings.ToLower(card.Number)
-	card.Source = strings.ToLower(card.Source)
-	card.Watermark = strings.ToLower(card.Watermark)
-	card.Artist = strings.ToLower(card.Artist)
-	card.ImageName = strings.ToLower(card.ImageName)
 }
 
 // LoadCollection unmarshals a mtgjson.com data dump into Set & Card structs
