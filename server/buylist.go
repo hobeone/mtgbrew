@@ -12,6 +12,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/hobeone/mtgbrew/db"
+	"github.com/hobeone/mtgbrew/mtgjson"
 	"github.com/labstack/echo"
 )
 
@@ -38,11 +39,11 @@ func stringToDeck(cards string, excludebasic bool, dbh *db.Handle) (DeckList, []
 			errs = append(errs, fmt.Errorf("Unknown card: '%s' (%s)", name, err))
 			continue
 		}
-		if excludebasic && card.Rarity == "Basic Land" {
+		if excludebasic && card.IsBasicLand() {
 			continue
 		}
 
-		err = deck.AddCard(card.Name, count)
+		err = deck.AddCard(card, count)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -57,10 +58,10 @@ func subtractDeck(newDeck, collection DeckList) DeckList {
 		if cEntry, ok := collection[name]; ok {
 			newCount := entry.Count - cEntry.Count
 			if newCount > 0 {
-				newList.AddCard(name, newCount)
+				newList.AddCard(cEntry.Card, newCount)
 			}
 		} else {
-			newList.AddCard(name, entry.Count)
+			newList.AddCard(entry.Card, entry.Count)
 		}
 	}
 	return newList
@@ -73,14 +74,25 @@ type formatResp struct {
 
 func (a *APIServer) formatBuyList(c echo.Context) error {
 	//TODO: input length protection
-	name := c.FormValue("cardlist")
+	cardlist := c.FormValue("cardlist")
 	excludebasic := false
 	if c.FormValue("excludebasic") == "true" {
 		excludebasic = true
 	}
 	subtractcards := c.FormValue("subtractlist")
 
-	cards, cardsErrs := stringToDeck(name, excludebasic, a.DBH)
+	if cardlist == "" {
+		cardfile, err := c.FormFile("cardlistfile")
+		if err != nil {
+			return fmt.Errorf("No form or file input given: %s", err)
+		}
+		src, err := cardfile.Open()
+		if err != nil {
+			return fmt.Errorf("Error opening form file: %s", err)
+		}
+		defer src.Close()
+	}
+	cards, cardsErrs := stringToDeck(cardlist, excludebasic, a.DBH)
 	subcards, subcardsErrs := stringToDeck(subtractcards, excludebasic, a.DBH)
 
 	buylist := subtractDeck(cards, subcards)
@@ -90,12 +102,12 @@ func (a *APIServer) formatBuyList(c echo.Context) error {
 
 // CardEntry represents the name and count of a particular card in the list
 type CardEntry struct {
-	Name  string
+	Card  *mtgjson.Card
 	Count int
 }
 
 func (c CardEntry) String() string {
-	return fmt.Sprintf("%d %s", c.Count, c.Name)
+	return fmt.Sprintf("%d %s", c.Count, c.Card.Name)
 }
 
 // DeckList represents a set of cards
@@ -117,23 +129,23 @@ func (d DeckList) String() string {
 }
 
 // AddCard adds a card to the deck up to a max of 4 except for basic lands
-func (d DeckList) AddCard(name string, count int) error {
-	if name == "" {
+func (d DeckList) AddCard(card *mtgjson.Card, count int) error {
+	if card.Name == "" {
 		return fmt.Errorf("Card name can't be empty")
 	}
 	if count < 1 {
 		return fmt.Errorf("Card count must be > 0")
 	}
-	if c, ok := d[name]; ok {
+	if c, ok := d[card.Name]; ok {
 		c.Count = c.Count + count
 	} else {
-		d[name] = &CardEntry{
-			Name:  name,
+		d[card.Name] = &CardEntry{
+			Card:  card,
 			Count: count,
 		}
 	}
-	if d[name].Count > 4 {
-		d[name].Count = 4
+	if d[card.Name].Count > 4 && !card.IsBasicLand() {
+		d[card.Name].Count = 4
 	}
 
 	return nil

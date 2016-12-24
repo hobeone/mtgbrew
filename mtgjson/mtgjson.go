@@ -108,6 +108,11 @@ type Card struct {
 	SetURL   string `json:"set_url,omitempty"`
 }
 
+// IsBasicLand returns true if the card is a basic land type
+func (c *Card) IsBasicLand() bool {
+	return c.Rarity == "Basic Land"
+}
+
 type Legality struct {
 	Format   string `json:"format"`
 	Legality string `json:"legality"`

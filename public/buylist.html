@@ -1,12 +1,20 @@
-<html>
+<!doctype html>
+
+<html lang="en">
 <head>
-<title></title>
+  <meta charset="utf-8">
+  <title>MTGBrew Buylist Helper</title>
+  <meta name="description" content="mtgbrew buylist">
+  <meta name="author" content="mtgbrew">
 </head>
+
 <body>
-<form action="/v1/buylist" method="post" id="cards">
+
+<form action="/v1/buylist" method="post" id="cards" enctype="multipart/form-data">
   Cards:<br>
-  <textarea form="cards" name="cardlist" rows="24" cols="80" placeholder="cards..." required=true></textarea>
+  <textarea form="cards" name="cardlist" rows="24" cols="80" placeholder="cards..."></textarea>
   <br/>
+  Or upload a file: <input type="file" name="cardlistfile"><br>
   Cards you already have:<br/>
   <textarea form="cards" name="subtractlist" rows="24" cols="80" placeholder="cards..."></textarea>
   <br/>

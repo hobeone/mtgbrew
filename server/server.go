@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"net/http"
+	"time"
 
 	"github.com/hobeone/mtgbrew/db"
 	"github.com/labstack/echo"
@@ -27,6 +29,8 @@ func (s *APIServer) Serve() error {
 	e.Debug = true
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.Use(middleware.BodyLimit("1024K"))
+	e.Use(middleware.Gzip())
 	e.Use(headers)
 
 	e.GET("/v1/cards", s.handleCards)
@@ -39,7 +43,19 @@ func (s *APIServer) Serve() error {
 	e.Static("/img/", "/home/hobe/.forge/pics/cards/")
 
 	t := &Template{
-		templates: template.Must(template.New("resp").Parse(`<html>
+		templates: template.Must(template.New("resp").Parse(`
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>MTGBrew Buylist Helper</title>
+  <meta name="description" content="mtgbrew buylist">
+  <meta name="author" content="mtgbrew">
+</head>
+
+<body>
 		Errors:
 		<ul>
 		{{range .Errs}}
@@ -50,14 +66,24 @@ func (s *APIServer) Serve() error {
 		DeckList:
 		<ul>
 		{{range $key, $value := .Deck}}
-		<li>{{$value.Count}}  {{$value.Name}}</li>
+		<li>{{$value.Count}}  {{$value.Card.Name}}</li>
 		{{end}}
 		</ul>
+		Buy on TCGPlayer <a href="http://store.tcgplayer.com/list/selectproductmagic.aspx?partner=MTGGLDFSH&c={{.BuyLink}}"
+
+</body>
 		</html>`)),
 	}
 	e.Renderer = t
 
-	err := e.Start(":7999")
+	customServer := &http.Server{
+		Addr:           ":7999",
+		ReadTimeout:    20 * time.Second,
+		WriteTimeout:   20 * time.Second,
+		MaxHeaderBytes: 2048,
+	}
+
+	err := e.StartServer(customServer)
 	if err != nil {
 		return fmt.Errorf("Error starting server: %s", err)
 	}
@@ -82,7 +108,6 @@ func headers(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Response().Header().Set("Access-Control-Expose-Headers", "link,content-length")
 		c.Response().Header().Set("License", "The textual information presented through this API about Magic: The Gathering is copyrighted by Wizards of the Coast.")
 		c.Response().Header().Set("Disclaimer", "This API is not produced, endorsed, supported, or affiliated with Wizards of the Coast.")
-		c.Response().Header().Set("Pricing", "store.tcgplayer.com allows you to buy cards from any of our vendors, all at the same time, in a simple checkout experience. Shop, Compare & Save with TCGplayer.com!")
 		c.Response().Header().Set("Strict-Transport-Security", "max-age=86400")
 		return next(c)
 	}
