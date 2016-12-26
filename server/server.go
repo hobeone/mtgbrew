@@ -43,9 +43,7 @@ func (s *APIServer) Serve() error {
 	e.Static("/img/", "/home/hobe/.forge/pics/cards/")
 
 	t := &Template{
-		templates: template.Must(template.New("resp").Parse(`
-<!doctype html>
-
+		templates: template.Must(template.New("resp").Parse(`<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -69,7 +67,7 @@ func (s *APIServer) Serve() error {
 		<li>{{$value.Count}}  {{$value.Card.Name}}</li>
 		{{end}}
 		</ul>
-		Buy on TCGPlayer <a href="http://store.tcgplayer.com/list/selectproductmagic.aspx?partner=MTGGLDFSH&c={{.BuyLink}}"
+		<a href="http://store.tcgplayer.com/list/selectproductmagic.aspx?c={{.Deck.TCGList}}">Buy on TCGPlayer </a>
 
 </body>
 		</html>`)),

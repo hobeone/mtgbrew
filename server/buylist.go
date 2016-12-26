@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"sort"
@@ -16,10 +17,9 @@ import (
 	"github.com/labstack/echo"
 )
 
-func stringToDeck(cards string, excludebasic bool, dbh *db.Handle) (DeckList, []error) {
+func readerToDeck(file io.Reader, excludebasic bool, dbh *db.Handle) (DeckList, []error) {
 	t := time.Now()
-	cardreader := strings.NewReader(cards)
-	scanner := bufio.NewScanner(cardreader)
+	scanner := bufio.NewScanner(file)
 	deck := DeckList{}
 	errs := []error{}
 	linecount := 0
@@ -73,14 +73,15 @@ type formatResp struct {
 }
 
 func (a *APIServer) formatBuyList(c echo.Context) error {
-	//TODO: input length protection
 	cardlist := c.FormValue("cardlist")
+	subtractcards := c.FormValue("subtractlist")
+
 	excludebasic := false
 	if c.FormValue("excludebasic") == "true" {
 		excludebasic = true
 	}
-	subtractcards := c.FormValue("subtractlist")
 
+	var cardreader io.Reader
 	if cardlist == "" {
 		cardfile, err := c.FormFile("cardlistfile")
 		if err != nil {
@@ -91,13 +92,34 @@ func (a *APIServer) formatBuyList(c echo.Context) error {
 			return fmt.Errorf("Error opening form file: %s", err)
 		}
 		defer src.Close()
+		cardreader = src
+	} else {
+		cardreader = strings.NewReader(cardlist)
 	}
-	cards, cardsErrs := stringToDeck(cardlist, excludebasic, a.DBH)
-	subcards, subcardsErrs := stringToDeck(subtractcards, excludebasic, a.DBH)
+
+	var subtractreader io.Reader
+	subtractreader = strings.NewReader(subtractcards)
+	if subtractcards == "" { // See if there is a file to read
+		cardfile, err := c.FormFile("subtractlistfile")
+		if err == nil { // subtract list isn't manditory
+			src, err := cardfile.Open()
+			if err != nil {
+				return fmt.Errorf("Error opening form file: %s", err)
+			}
+			defer src.Close()
+			subtractreader = src
+		}
+	}
+	cards, cardsErrs := readerToDeck(cardreader, excludebasic, a.DBH)
+	subcards, subcardsErrs := readerToDeck(subtractreader, excludebasic, a.DBH)
 
 	buylist := subtractDeck(cards, subcards)
 
-	return c.Render(http.StatusOK, "resp", formatResp{buylist, append(cardsErrs, subcardsErrs...)})
+	f := formatResp{
+		Deck: buylist,
+		Errs: append(cardsErrs, subcardsErrs...),
+	}
+	return c.Render(http.StatusOK, "resp", f)
 }
 
 // CardEntry represents the name and count of a particular card in the list
@@ -151,10 +173,29 @@ func (d DeckList) AddCard(card *mtgjson.Card, count int) error {
 	return nil
 }
 
+// TCGList formats Deck for TCGPlayer mass input
+// 4 Mountain||4 Forest||...etc
+func (d DeckList) TCGList() string {
+	l := make([]string, len(d))
+	i := 0
+	for _, v := range d {
+		l[i] = v.String()
+		i++
+	}
+	sort.Strings(l)
+	return strings.Join(l, "||")
+}
+
+/*
+*
+* Return empty sring for empty lines and common metadata lines
+* eg: sideboard etc.
+*
+ */
 func parseLine(line string) (string, int, error) {
 	line = strings.TrimSpace(line)
 	if line == "" {
-		return "", 0, nil // Empty line error?
+		return "", 0, nil
 	}
 	matched, err := regexp.MatchString(`(?i)^\[?side`, line)
 	if matched {
